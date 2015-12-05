@@ -1,0 +1,43 @@
+#!/bin/bash
+# Convert Galera GRA_* files to human readable output
+# Usage: grareader [file]
+# Example: grareader /var/lib/mysql/GRA_1_1.log
+
+##
+## GRA header file path
+##
+path=/tmp
+gra_header_path=$path/GRA-Header
+tmp_path=$path/grareader.tmp
+
+input=$1
+[ ! -e $input ] && echo 'Error: File does not exist' && exit 1
+
+get_gra_header()
+{
+        download_url='http://blog.secaserver.com/files/GRA-Header'
+        wget_bin=`command -v wget`
+        [ -z "$wget_bin" ] && echo 'Error: Unable to locate wget. Please install it first' && exit 1
+        echo "Downloadling GRA-Header file into $path"
+        $wget_bin --quiet $download_url -P $path
+        [ $? -ne 0 ] && echo 'Error: Download failed' && exit 1
+}
+
+locate_files()
+{
+        mysqlbinlog_bin=`command -v mysqlbinlog`
+        [ -z "$mysqlbinlog_bin" ] && echo 'Error: Unable to locate mysqlbinlog binary. Please install it first' && exit 1
+        [ ! -e $gra_header_path ] && echo 'Error: Unable to locate GRA header file' && get_gra_header
+
+}
+
+locate_files
+
+cat $gra_header_path >> $tmp_path
+cat $input >> $tmp_path
+
+echo ''
+clear
+$mysqlbinlog_bin -v -v -v $tmp_path
+echo ''
+rm -rf $tmp_path
