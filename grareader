@@ -1,7 +1,7 @@
 #!/bin/bash
 # Convert Galera GRA_* files to human readable output
-# Usage: grareader [file]
-# Example: grareader /var/lib/mysql/GRA_1_1.log
+# Usage: grareader [file] [major version, if blank is 5.6/10.x]
+# Example: grareader /var/lib/mysql/GRA_1_1.log 5.5
 
 ##
 ## GRA header file path
@@ -9,32 +9,35 @@
 path=/tmp
 gra_header_path=$path/GRA-Header
 tmp_path=$path/grareader.tmp
+download_url='https://github.com/ashraf-s9s/grareader/blob/master'
 
-input=$1
-[ ! -e $input ] && echo 'Error: File does not exist' && exit 1
+file=$1
+version=$2
+
+[ ! -e $file ] && echo 'Error: File does not exist' && exit 1
 
 get_gra_header()
 {
-        download_url='http://blog.secaserver.com/files/GRA-Header'
-        wget_bin=`command -v wget`
-        [ -z "$wget_bin" ] && echo 'Error: Unable to locate wget. Please install it first' && exit 1
-        echo "Downloadling GRA-Header file into $path"
-        $wget_bin --quiet $download_url -P $path
-        [ $? -ne 0 ] && echo 'Error: Download failed' && exit 1
+  [ $version == '5.5' ] && dl="$download_url/GRA-header-55?raw=true" || dl="$download_url/GRA-header-56?raw=true"
+  wget_bin=`command -v wget`
+  [ -z "$wget_bin" ] && echo 'Error: Unable to locate wget. Please install it first' && exit 1
+  echo "Downloadling GRA-Header file into $path"
+  $wget_bin --quiet $dl -P $path
+  [ $? -ne 0 ] && echo 'Error: Download failed' && exit 1
 }
 
 locate_files()
 {
-        mysqlbinlog_bin=`command -v mysqlbinlog`
-        [ -z "$mysqlbinlog_bin" ] && echo 'Error: Unable to locate mysqlbinlog binary. Please install it first' && exit 1
-        [ ! -e $gra_header_path ] && echo 'Error: Unable to locate GRA header file' && get_gra_header
+  mysqlbinlog_bin=`command -v mysqlbinlog`
+  [ -z "$mysqlbinlog_bin" ] && echo 'Error: Unable to locate mysqlbinlog binary. Please install it first' && exit 1
+  [ ! -e $gra_header_path ] && echo 'Error: Unable to locate GRA header file' && get_gra_header
 
 }
 
 locate_files
 
 cat $gra_header_path >> $tmp_path
-cat $input >> $tmp_path
+cat $file >> $tmp_path
 
 echo ''
 clear
