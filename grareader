@@ -3,10 +3,8 @@
 # Author: Ashraf Sharif <ashraf@severalnines.com>
 # URL   : https://github.com/ashraf-s9s/grareader
 
-path=/tmp
-gra_header_path=$path/GRA-Header
-tmp_path=$path/grareader.tmp
-download_url='https://github.com/ashraf-s9s/grareader/blob/master'
+path="${TMPDIR:-/tmp}"
+tmp_file=$path/grareader.tmp
 
 file=$1
 version=$2
@@ -14,39 +12,45 @@ version=$2
 help()
 {
   echo 'grareader - Convert Galera GRA_* files to human readable output'
-  echo 'Usage: grareader [file] [major version, default to 5.6/10.x]'
+  echo 'Usage: grareader <file> [major version, default to 5.6/10.x]'
   echo 'Example: '
   echo '(MySQL 5.6/MariaDB 10.x): grareader GRA_5_1992992.log'
   echo '(MySQL 5.5)             : grareader GRA_5_1992992.log 5.5'
 }
 
-[ ! -e $file ] && help && exit 0
+if (($# < 1 || $# > 2)); then
+    help
+    exit
+fi
 
-get_gra_header()
+if [[ ! -e "$file" ]] ; then
+    echo "Error: Could not locate file '$file'." >&2
+    help >&2
+    exit 1
+fi
+
+if ! command -v mysqlbinlog &>/dev/null ; then
+  echo 'Error: Unable to locate mysqlbinlog binary. Please install it or put it in your PATH.' >&2
+  exit 1
+fi
+if ! command -v base64 &>/dev/null ; then
+  echo 'Error: Unable to locate mysqlbinlog binary. Please install it or put it in your PATH.' >&2
+  exit 1
+fi
+
+binlog_55_header='/mJpbjR1AlAPAQAAAGcAAABrAAAAAQAEADUuNS4yNS1kZWJ1Zy1sb2cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUCUBM4DQAIABIABAQEBBIAAFQABBoIAAAACAgIAgA='
+binlog_56_header='/mJpbinwDlQPAgAAAHQAAAB4AAAAAQAEADUuNi4yMC02OC4wLTU2LWxvZwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKfAOVBM4DQAIABIABAQEBBIAAFwABBoIAAAACAgIAgAAAAoKChkZAAHaBWEYKfAOVCMCAAAAbwAAAOcAAAAAAAIAAAAAAAAAeyxHpzTUEeSAhwgAJy6VHAEAAAAAAAAAAQAAAAAAAAACAAAAAAAAAIjeK2jLK+4bSsW5zgZ4dokBAAAAAAAAAAEAAAAAAAAAGgAAAAAAAACuDmx0'
+
 {
-  [ $version == '5.5' ] && dl="$download_url/GRA-header-55?raw=true" || dl="$download_url/GRA-header-56?raw=true"
-  wget_bin=`command -v wget`
-  [ -z "$wget_bin" ] && echo 'Error: Unable to locate wget. Please install it first' && exit 1
-  echo "Downloadling GRA-Header file into $path"
-  $wget_bin --quiet $dl -P $path
-  [ $? -ne 0 ] && echo 'Error: Download failed' && exit 1
-}
+    { 
+        if [[ $version = 5.5 ]] ; then 
+            echo "$binlog_55_header"
+        else
+            echo "$binlog_56_header"
+        fi
+    } | base64 -D
+    cat "$file"
+} > "$tmp_file"
 
-locate_files()
-{
-  mysqlbinlog_bin=`command -v mysqlbinlog`
-  [ -z "$mysqlbinlog_bin" ] && echo 'Error: Unable to locate mysqlbinlog binary. Please install it first' && exit 1
-  [ ! -e $gra_header_path ] && echo 'Error: Unable to locate GRA header file' && get_gra_header
-
-}
-
-locate_files
-
-cat $gra_header_path >> $tmp_path
-cat $file >> $tmp_path
-
-echo ''
-clear
-$mysqlbinlog_bin -v -v -v $tmp_path
-echo ''
-rm -rf $tmp_path
+mysqlbinlog -v -v -v "$tmp_file"
+rm -rf "$tmp_file"
