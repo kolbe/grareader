@@ -1,21 +1,24 @@
 #!/bin/bash
 # Convert Galera GRA_* files to human readable output
 # Author: Ashraf Sharif <ashraf@severalnines.com>
+#         Kolbe Kegel <kolbe@mariadb.com>
 # URL   : https://github.com/ashraf-s9s/grareader
+#         https://github.com/kolbe/grareader
 
 path="${TMPDIR:-/tmp}"
 tmp_file=$path/grareader.tmp
 
 file=$1
-version=$2
+version=${2:-5.6}
 
 help()
 {
-  echo 'grareader - Convert Galera GRA_* files to human readable output'
-  echo 'Usage: grareader <file> [major version, default to 5.6/10.x]'
-  echo 'Example: '
-  echo '(MySQL 5.6/MariaDB 10.x): grareader GRA_5_1992992.log'
-  echo '(MySQL 5.5)             : grareader GRA_5_1992992.log 5.5'
+  printf '%s\n' \
+      'grareader - Convert Galera GRA_* files to human readable output' \
+      'Usage: grareader <file> [major version, default to 5.6/10.x]' \
+      'Example: ' \
+      '(MySQL 5.6/MariaDB 10.x): grareader GRA_5_1992992.log' \
+      '(MySQL 5.5)             : grareader GRA_5_1992992.log 5.5'
 }
 
 if (($# < 1 || $# > 2)); then
@@ -24,31 +27,35 @@ if (($# < 1 || $# > 2)); then
 fi
 
 if [[ ! -e "$file" ]] ; then
-    echo "Error: Could not locate file '$file'." >&2
+    printf 'Error: Could not locate file "%s".\n' "$file" >&2
     help >&2
     exit 1
 fi
 
+# make sure mysqlbinlog and base64 executables are available
 if ! command -v mysqlbinlog &>/dev/null ; then
   echo 'Error: Unable to locate mysqlbinlog binary. Please install it or put it in your PATH.' >&2
   exit 1
 fi
 if ! command -v base64 &>/dev/null ; then
-  echo 'Error: Unable to locate mysqlbinlog binary. Please install it or put it in your PATH.' >&2
+  echo 'Error: Unable to locate base64 binary. Please install it or put it in your PATH.' >&2
   exit 1
 fi
 
+# base64-encoded binlog headers
 binlog_55_header='/mJpbjR1AlAPAQAAAGcAAABrAAAAAQAEADUuNS4yNS1kZWJ1Zy1sb2cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANHUCUBM4DQAIABIABAQEBBIAAFQABBoIAAAACAgIAgA='
 binlog_56_header='/mJpbinwDlQPAgAAAHQAAAB4AAAAAQAEADUuNi4yMC02OC4wLTU2LWxvZwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKfAOVBM4DQAIABIABAQEBBIAAFwABBoIAAAACAgIAgAAAAoKChkZAAHaBWEYKfAOVCMCAAAAbwAAAOcAAAAAAAIAAAAAAAAAeyxHpzTUEeSAhwgAJy6VHAEAAAAAAAAAAQAAAAAAAAACAAAAAAAAAIjeK2jLK+4bSsW5zgZ4dokBAAAAAAAAAAEAAAAAAAAAGgAAAAAAAACuDmx0'
 
+# default to 5.6
+if [[ $version = 5.5 ]] ; then 
+    binlog_header=$binlog_55_header
+else
+    binlog_header=$binlog_56_header
+fi
+
+# decode binlog header and redirect to output file along with GRA_* file
 {
-    { 
-        if [[ $version = 5.5 ]] ; then 
-            echo "$binlog_55_header"
-        else
-            echo "$binlog_56_header"
-        fi
-    } | base64 -D
+    base64 -D <<<"$binlog_header"
     cat "$file"
 } > "$tmp_file"
 
